@@ -20,7 +20,7 @@ abigen!(IPROXY, "./proxy.json");
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    const HTTP_URL: &str = "";
+    const HTTP_URL: &str = "https://eth-mainnet.g.alchemy.com/v2/Am-SA6lZl7P1G2NY0D4Gim1pexDl8ghI";
     const OP_PROPOSER_ADDRESS: &str = "0xdfe97868233d1aa22e815a266982f2cf17685a27";
 
     let provider = Provider::<Http>::try_from(HTTP_URL)?;
