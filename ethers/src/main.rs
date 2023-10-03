@@ -64,17 +64,17 @@ async fn main() -> Result<()> {
     let mut filter = Filter::new()
         .address(uni_address)
         .event("numberTracker(uint256,string)")
-        // .topic0(z"event_name")
         .from_block(oldblocknum)
         .to_block(newblocknum);
 
     // println!("{} pools found!", logs.iter().len());
 
-    let five_sec = time::Duration::from_secs(5);
+    let five_sec = time::Duration::from_secs(13);
     loop {
         let logs = client.get_logs(&filter).await?;
         println!("{} pools found!", logs.iter().len());
         println!("ohayo");
+        println!("result and block {oldblocknum:?}/{newblocknum:?}");
         for log in logs.iter() {
             println!("ohayo2");
             // let output_root = Bytes::from(log.topics[1].as_bytes().to_vec());
@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
         }
         thread::sleep(five_sec);
         oldblocknum = newblocknum;
-        newblocknum = client.get_block_number().await? - 7;
+        newblocknum = client.get_block_number().await? - 3;
         filter = filter.from_block(oldblocknum).to_block(newblocknum);
     }
 
