@@ -4,6 +4,7 @@ use ethers_core::abi::{AbiType, ParamType};
 use ethers_core::types::*;
 use eyre::Result;
 use std::sync::Arc;
+use std::{thread, time};
 
 #[derive(EthEvent, Debug)]
 #[ethevent(abi = "OutputProposed(bytes32,uint256,uint256,uint256)")]
@@ -18,7 +19,7 @@ struct OutputProposed {
 }
 
 #[derive(EthEvent, Debug)]
-#[ethevent(abi = "numberTracker(uint256 num, string str)")]
+#[ethevent(abi = "numberTracker(uint256,string)")]
 struct NumberTracker {
     num: U256,
     str: String,
@@ -47,18 +48,58 @@ async fn main() -> Result<()> {
 
     let provider = Provider::<Http>::try_from(HTTP_URL)?;
     let client = Arc::new(provider);
-    let address: Address = OP_PROPOSER_ADDRESS.parse()?;
+    //let address: Address = OP_PROPOSER_ADDRESS.parse()?;
     // let contract = IPROXY::new(address, client);
     // let latest_blocknumber = provider.get_block_number().await?;
 
     let uni_address: Address = UNISWAP_ADDRESS.parse()?;
-    let contract = IUNISWAP::new(uni_address, client);
+    //let contract = IUNISWAP::new(uni_address, client);
 
     // if let Ok(version_info) = contract.version().call().await {
     //     println!("Version info is {version_info:?}");
     // }
+    let mut oldblocknum = U64([0]);
+    let mut newblocknum = client.get_block_number().await? - 7;
+    // instead of put 18000000, put latest block number - 20
+    let mut filter = Filter::new()
+        .address(uni_address)
+        .event("numberTracker(uint256,string)")
+        // .topic0(z"event_name")
+        .from_block(oldblocknum)
+        .to_block(newblocknum);
 
-    listen_specific_events(&contract).await?;
+    // println!("{} pools found!", logs.iter().len());
+
+    let five_sec = time::Duration::from_secs(5);
+    loop {
+        let logs = client.get_logs(&filter).await?;
+        println!("{} pools found!", logs.iter().len());
+        println!("ohayo");
+        for log in logs.iter() {
+            println!("ohayo2");
+            // let output_root = Bytes::from(log.topics[1].as_bytes().to_vec());
+            // let l2_output_index = U256::from_big_endian(&log.topics[1].as_bytes());
+            // let l2_block_number = U256::from_big_endian(&log.topics[2].as_bytes());
+            // let l1_timestamp = U256::from_big_endian(&log.data[29..32]);
+
+            // println!(
+            //     "output_root = {output_root}, l2OutputIndex = {l2_output_index}, l2BlockNumber = {l2_block_number}, l1Timestamp = {l1_timestamp}",
+            // );
+            let l1_timestamp = U256::from_big_endian(&log.data[29..32]);
+            println!("result {l1_timestamp:?} and block {oldblocknum:?}/{newblocknum:?}")
+
+            // We can get it from Event
+            // if let Ok(output_proposal) = contract.get_l2_output(l2OutputIndex).call().await {
+            //     println!("output_proposal is {output_proposal:?}");
+            // }
+        }
+        thread::sleep(five_sec);
+        oldblocknum = newblocknum;
+        newblocknum = client.get_block_number().await? - 7;
+        filter = filter.from_block(oldblocknum).to_block(newblocknum);
+    }
+
+    // listen_specific_events(&contract).await?;
 
     Ok(())
 }
@@ -71,30 +112,39 @@ async fn main() -> Result<()> {
 async fn listen_specific_events(contract: &IUNISWAP<Provider<Http>>) -> Result<()> {
     let provider = contract.client();
     let latest_blocknumber = provider.get_block_number().await?;
-    println!("ohayo2 {latest_blocknumber:?}");
-    let new_timelag = TimeLag::new(provider, 40);
-    let latest_blocknumber_timelag = new_timelag.get_block_number().await?;
-    // let block_stream = new_timelag.subscribe_blocks().await?;
-    // let latest_blocknumber = provider.get_block_number().await?;
-    // let to_block = latest_blocknumber - 5;
-    println!("ohayo toblock {latest_blocknumber_timelag:?}");
-    let finalized = BlockNumber::Finalized;
-    println!("ohayo finalized block {finalized}");
-    let event = contract.event::<NumberTracker>();
-
+    //println!("ohayo2 {latest_blocknumber:?}");
+    // let new_timelag = TimeLag::new(provider, 40);
+    // let latest_blocknumber_timelag = new_timelag.get_block_number().await?;
+    // // let block_stream = new_timelag.subscribe_blocks().await?;
+    // // let latest_blocknumber = provider.get_block_number().await?;
+    // // let to_block = latest_blocknumber - 5;
+    // println!("ohayo toblock {latest_blocknumber_timelag:?}");
+    // let finalized = BlockNumber::Finalized;
+    // println!("ohayo finalized block {finalized}");
+    let event = contract.event::<NumberTracker>().from_block(0);
+    let event_name = "x03eff96be556f3f2723cf37f74bbd4e1cc33a150b8d6c459da9382b55d66a435";
     let mut stream = event.stream().await?;
+    let filter = Filter::new()
+        .to_block(latest_blocknumber - 5)
+        .event(event_name);
     loop {
-        // let latest_blocknumber = provider.get_block_number().await?;
-        // let to_block = latest_blocknumber - 5;
-        // println!("ohayo toblock {to_block:?}");
-        // let new_event =
-        // let mut stream = contract.event::<NumberTracker>().to_block(to_block).stream().await?;
-        match stream.next().await {
-            Some(result) => println!("ohayo {result:?}, {latest_blocknumber:?}"),
-            None => {
-                println!("ohayo, {latest_blocknumber:?}")
-            }
-        }
+        let latest_blocknumber = provider.get_block_number().await?;
+
+        // // let to_block = latest_blocknumber - 5;
+        // let event = contract
+        //     .event::<NumberTracker>()
+        //     .from_block(0)
+        //     .to_block(latest_blocknumber - 3);
+
+        // let mut stream = event.stream().await?;
+        let logs = provider.get_logs(&filter).await?;
+        println!("{:?}", logs);
+        // match stream.next().await {
+        //     Some(result) => println!("ohayo {result:?}, {latest_blocknumber:?}"),
+        //     None => {
+        //         println!("ohayo, {latest_blocknumber:?}")
+        //     }
+        // }
     }
 }
 
