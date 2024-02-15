@@ -1,18 +1,15 @@
-use alloy_dyn_abi::{parser::Storage, DynSolType, DynSolValue};
+use alloy_dyn_abi::DynSolType;
 use alloy_primitives::{
-    fixed_bytes,
     hex::{self, FromHex},
-    keccak256, FixedBytes, Keccak256, B256, U256,
+    FixedBytes, Keccak256,
 };
-use alloy_rlp::{BytesMut, Decodable, RlpDecodable, RlpEncodable, RlpMaxEncodedLen};
-
-use std::str::FromStr as _;
+use rlp::Rlp;
 
 fn main() {
     // Read storage key
     let storage_key =
         "0x0000000000000000000000000000000000000000000000000000000000000002".to_string();
-    // Read storage value (assume uint256 for simplicity, but it could be any )
+    // Read storage value
     let storage_value =
         "30000000000050000001173585821419940366555131416710628997561811671104543".to_string();
     // read siblings bytes encoded
@@ -20,54 +17,48 @@ fn main() {
     // read root
     let root = "0xedd39c02c3e79949deea0f3c06fbc7fd73ad5d01327fa60c9d798b310fe601fe".to_string();
 
+    // Step 1. Compute the key hash of target node
     let mut hasher = Keccak256::new();
-    // Step1. Calculate the leaf node
-    // let key = U256::from_str(&storage_key).unwrap();
-    // let value = U256::from_str(&storage_value).unwrap();
+    // [KEY] Current node's key is keccak256(storage_slot)
+    hasher.update(storage_key);
+    let key_hash = hasher.finalize();
+    println!("current key: \n{}\n", key_hash);
+
+    // Step 2. Verify the merkle proof
+    let mut current_hash = key_hash;
 
     // Decode serialized siblings
     let siblings_type: DynSolType = "bytes[]".parse().unwrap();
     let bytes = Vec::from_hex(siblings).expect("Invalid hex string");
     let serialized_siblings = siblings_type.abi_decode(&bytes).unwrap();
 
-    // Current node's key is keccak256(storage_slot)
-    hasher = Keccak256::new();
-    hasher.update(storage_key);
-    let key_hash = hasher.finalize();
-    println!("key_hash: {}", key_hash);
-
-    // Step 2. Verify the merkle proof
-    let mut current_hash = key_hash;
-
     if let Some(siblings) = serialized_siblings.as_array() {
         for sibling in siblings {
-            // each sibling is rlp serialized value of the node
+            // Step 2: Decode the siblings
+            let sibling_hex = format!("0x{}", hex::encode(sibling.as_bytes().unwrap()));
 
-            let slibling_rlp_hex = format!("0x{}", hex::encode(sibling.as_bytes().unwrap()));
-            println!("slibling_rlp_hex: {:?}", slibling_rlp_hex);
-            let mut data = slibling_rlp_hex.as_bytes();
-            println!("current_hash: {:?}", hex::encode(&current_hash));
-            let node = <String as Decodable>::decode(&mut data).unwrap();
-            println!("node: {:?}", node);
-            let node_key = hex::decode(node).unwrap();
+            let siblings_bytes = hex::decode(sibling_hex.as_bytes()).expect("Invalid hex string");
+            // RLP decode the RLP encoded node
+            let siblings_rlp = Rlp::new(&siblings_bytes);
+            let node: Vec<u8> = siblings_rlp.data().unwrap().to_vec();
+            // Step 2.1: Compute the Key of the sibling node
             hasher = Keccak256::new();
-            hasher.update(current_hash);
-            hasher.update(node_key);
+            hasher.update(node);
             current_hash = hasher.finalize();
+            println!("sibling key: \n{:?}\n", current_hash);
         }
     }
 
     // Step 3. Verify the root
     let root_bytes: FixedBytes<32> = FixedBytes::from_hex(root).unwrap();
+    // Computed hash should match the given root
     if current_hash != root_bytes.as_slice() {
-        println!("current_hash: {:?}", hex::encode(&current_hash));
-        println!("root: {:?}", hex::encode(root_bytes.as_slice()));
-        panic!("Invalid merkle proof");
-    }
-    println!("Merkle proof verified");
-}
+        println!(
+            "original root: \n{:?}\n",
+            hex::encode(root_bytes.as_slice())
+        );
 
-#[derive(RlpEncodable, RlpDecodable, Debug)]
-struct Node {
-    hash: String,
+        panic!("Invalid merkle proof :/");
+    }
+    println!("✅ åMerkle proof verified");
 }
