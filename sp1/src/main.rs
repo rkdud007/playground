@@ -1,7 +1,7 @@
 use alloy_dyn_abi::DynSolType;
 use alloy_primitives::{
     hex::{self, FromHex},
-    FixedBytes, Keccak256,
+    keccak256, FixedBytes, Keccak256,
 };
 use rlp::Rlp;
 
@@ -18,10 +18,8 @@ fn main() {
     let root = "0xedd39c02c3e79949deea0f3c06fbc7fd73ad5d01327fa60c9d798b310fe601fe".to_string();
 
     // Step 1. Compute the key hash of target node
-    let mut hasher = Keccak256::new();
     // [KEY] Current node's key is keccak256(storage_slot)
-    hasher.update(storage_key);
-    let key_hash = hasher.finalize();
+    let key_hash = keccak256(storage_key.as_bytes());
     println!("current key: \n{}\n", key_hash);
 
     // Step 2. Verify the merkle proof
@@ -33,18 +31,20 @@ fn main() {
     let serialized_siblings = siblings_type.abi_decode(&bytes).unwrap();
 
     if let Some(siblings) = serialized_siblings.as_array() {
-        for sibling in siblings {
+        for (i, sibling) in siblings.iter().enumerate() {
             // Step 2: Decode the siblings
-            let sibling_hex = format!("0x{}", hex::encode(sibling.as_bytes().unwrap()));
-
-            let siblings_bytes = hex::decode(sibling_hex.as_bytes()).expect("Invalid hex string");
             // RLP decode the RLP encoded node
+            let sibling_hex = format!("0x{}", hex::encode(sibling.as_bytes().unwrap()));
+            let siblings_bytes = hex::decode(sibling_hex.as_bytes()).expect("Invalid hex string");
             let siblings_rlp = Rlp::new(&siblings_bytes);
             let node: Vec<u8> = siblings_rlp.data().unwrap().to_vec();
+
             // Step 2.1: Compute the Key of the sibling node
-            hasher = Keccak256::new();
+            let mut hasher = Keccak256::new();
             hasher.update(node);
+            hasher.update(current_hash);
             current_hash = hasher.finalize();
+
             println!("sibling key: \n{:?}\n", current_hash);
         }
     }
