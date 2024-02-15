@@ -4,7 +4,7 @@ use alloy_primitives::{
     hex::{self, FromHex},
     keccak256, FixedBytes, Keccak256, B256, U256,
 };
-use alloy_rlp::{RlpEncodable, RlpMaxEncodedLen};
+use alloy_rlp::{BytesMut, Decodable, RlpDecodable, RlpEncodable, RlpMaxEncodedLen};
 
 use std::str::FromStr as _;
 
@@ -22,35 +22,37 @@ fn main() {
 
     let mut hasher = Keccak256::new();
     // Step1. Calculate the leaf node
-    let key = U256::from_str(&storage_key).unwrap();
-    println!("key: {:?}", key);
-    let value = U256::from_str(&storage_value).unwrap();
-    println!("value: {:?}", value);
-    hasher = Keccak256::new();
-    hasher.update(storage_key.as_bytes());
-    hasher.update(storage_value.as_bytes());
-    let leaf_bytes = hasher.finalize();
-
-    let leaf_hash = format!("0x{}", hex::encode(leaf_bytes.clone()));
-
-    println!("leaf_hash: {:?}", leaf_hash);
+    // let key = U256::from_str(&storage_key).unwrap();
+    // let value = U256::from_str(&storage_value).unwrap();
 
     // Decode serialized siblings
     let siblings_type: DynSolType = "bytes[]".parse().unwrap();
     let bytes = Vec::from_hex(siblings).expect("Invalid hex string");
     let serialized_siblings = siblings_type.abi_decode(&bytes).unwrap();
 
+    // Current node's key is keccak256(storage_slot)
+    hasher = Keccak256::new();
+    hasher.update(storage_key);
+    let key_hash = hasher.finalize();
+    println!("key_hash: {}", key_hash);
+
     // Step 2. Verify the merkle proof
-    let mut current_hash = FixedBytes::from_hex(hex::encode(leaf_bytes)).unwrap();
+    let mut current_hash = key_hash;
 
     if let Some(siblings) = serialized_siblings.as_array() {
         for sibling in siblings {
-            println!("sibling: {:?}", hex::encode(sibling.as_bytes().unwrap()));
-            // Depending on the Merkle tree structure, you might need to adjust the order
-            // of concatenation. This example assumes the current hash is left and the proof element is right.
+            // each sibling is rlp serialized value of the node
+
+            let slibling_rlp_hex = format!("0x{}", hex::encode(sibling.as_bytes().unwrap()));
+            println!("slibling_rlp_hex: {:?}", slibling_rlp_hex);
+            let mut data = slibling_rlp_hex.as_bytes();
+            println!("current_hash: {:?}", hex::encode(&current_hash));
+            let node = <String as Decodable>::decode(&mut data).unwrap();
+            println!("node: {:?}", node);
+            let node_key = hex::decode(node).unwrap();
             hasher = Keccak256::new();
             hasher.update(current_hash);
-            hasher.update(sibling.as_bytes().unwrap());
+            hasher.update(node_key);
             current_hash = hasher.finalize();
         }
     }
@@ -63,4 +65,9 @@ fn main() {
         panic!("Invalid merkle proof");
     }
     println!("Merkle proof verified");
+}
+
+#[derive(RlpEncodable, RlpDecodable, Debug)]
+struct Node {
+    hash: String,
 }
