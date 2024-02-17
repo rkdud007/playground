@@ -6,6 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-alloy-primitives = "0.6.2"
+alloy-primitives = { version = "0.6.2", features = ["rlp"] }
 alloy-dyn-abi = "0.6.2"
+alloy-rlp = { version = "0.3", features = ["arrayvec", "derive"] }
 rlp = "0.4.6"
+nybbles = { version = "0.1.2", features = ["serde", "rlp"] }
