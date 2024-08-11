@@ -75,8 +75,8 @@ impl Interpreter {
             let ptr = mmap(
                 std::ptr::null_mut(),
                 alloc_size,
-                PROT_WRITE | PROT_READ,
-                MAP_PRIVATE | MAP_ANON | MAP_JIT,
+                PROT_WRITE,
+                MAP_PRIVATE | MAP_ANON,
                 -1,
                 0,
             ) as *mut u8;
@@ -88,7 +88,7 @@ impl Interpreter {
             std::ptr::copy_nonoverlapping(machine_code.as_ptr(), ptr, code_len);
 
             // Now make the memory executable
-            if mprotect(ptr as *mut libc::c_void, alloc_size, PROT_READ | PROT_EXEC) != 0 {
+            if mprotect(ptr as *mut libc::c_void, alloc_size, PROT_EXEC) != 0 {
                 panic!("mprotect failed: {}", std::io::Error::last_os_error());
             }
 
