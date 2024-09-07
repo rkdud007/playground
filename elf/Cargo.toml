@@ -1,0 +1,9 @@
+[package]
+name = "elf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+elf = "0.7.4"
+object = "0.36.3"
+memmap2 = "0.9.4"
